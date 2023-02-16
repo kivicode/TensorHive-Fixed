@@ -27,6 +27,7 @@ class Scheduler(ABC):
 class GreedyScheduler(Scheduler):
     def schedule_jobs(self, jobs_to_hardware, hardware_to_slots) -> List[Job]:
         scheduled_jobs = []
+        # print('greedy', jobs_to_hardware)
         for job in jobs_to_hardware:
             scheduled_tasks = 0
 
@@ -36,6 +37,7 @@ class GreedyScheduler(Scheduler):
                 if not gpu_uid:
                     break
                 slot = hardware_to_slots[task.hostname][gpu_uid]
+                # print(slot is None, slot CONFIG.SCHEDULE_QUEUED_JOBS_WHEN_FREE_MINS)
                 if slot is None or slot >= CONFIG.SCHEDULE_QUEUED_JOBS_WHEN_FREE_MINS:
                     scheduled_tasks += 1
 

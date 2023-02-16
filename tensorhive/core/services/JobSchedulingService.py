@@ -242,7 +242,8 @@ class JobSchedulingService(Service):
             for task in job.tasks:
                 gpu_uid = Scheduler.get_assigned_gpu_uid(task, available_hosts_with_gpu_occupation)
 
-                if not gpu_uid or task.pid not in task_nursery.running(task.hostname, job.user.username):
+                running = task_nursery.running(task.hostname, job.user.username)
+                if not gpu_uid or task.pid not in running:
                     task.status = TaskStatus.not_running
                     continue
 
@@ -251,14 +252,13 @@ class JobSchedulingService(Service):
                     other_process_pids = []
                 else:
                     other_process_pids = [process['pid'] for process in current_processes_on_gpu
-                                          if process['pid'] is not task.pid]
+                                          if process['pid'] is not task.pid and process['pid'] in running]
 
                 considered_future_period = timedelta(minutes=CONFIG.SCHEDULE_QUEUED_JOBS_WHEN_FREE_MINS)
                 interferes = self.interferes_with_reservations(job, available_hosts_with_gpu_occupation,
                                                                considered_future_period=considered_future_period,
                                                                # Queued jobs should run only between reservations
                                                                allow_own=False)
-
                 if len(other_process_pids) or interferes:
                     job_should_be_stopped = True
 
