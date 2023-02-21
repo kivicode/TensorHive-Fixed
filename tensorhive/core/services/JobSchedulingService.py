@@ -196,11 +196,12 @@ class JobSchedulingService(Service):
             log.info(self._log_msg(now=datetime.utcnow(), action='Killing ungracefully', id=job_id))
             self.stubborn_job_ids.remove(job_id)
             return business_stop(job_id, gracefully=False)
-        else:
-            log.info(self._log_msg(now=datetime.utcnow(), action='Stopping gracefully', id=job_id))
-            _, status = business_stop(job_id, gracefully=True)
-            if status != HTTPStatus.OK.value:
-                self.stubborn_job_ids.add(job_id)
+
+        log.info(self._log_msg(now=datetime.utcnow(), action='Stopping gracefully', id=job_id))
+        content, status = business_stop(job_id, gracefully=True)
+        if status != HTTPStatus.OK.value:
+            self.stubborn_job_ids.add(job_id)
+        return content, status
 
     def stop_scheduled(self):
         """Triggers `stop` on database records that should not be running.
@@ -222,7 +223,7 @@ class JobSchedulingService(Service):
         recently_scheduled = and_(Job._stop_at.isnot(None), Job._stop_at > consideration_threshold)
         after_start = or_(Job._start_at < Job._stop_at, Job._start_at.isnot(None))
         can_stop_now = Job._stop_at < now
-        jobs_to_stop = Job.query.filter(recently_scheduled, after_start, can_stop_now).all()
+        jobs_to_stop = Job.query.filter(recently_scheduled, can_stop_now).all()
 
         log.debug('{} jobs should be stopped.'.format(len(jobs_to_stop)))
         for job in jobs_to_stop:
