@@ -35,12 +35,15 @@ class GreedyScheduler(Scheduler):
                 # TODO: use stored gpu_uid when it becomes stored in Task
                 gpu_uid = Scheduler.get_assigned_gpu_uid(task, hardware_to_slots)
                 if not gpu_uid:
+                    scheduled_tasks += 1
                     break
                 slot = hardware_to_slots[task.hostname][gpu_uid]
                 # print(slot is None, slot CONFIG.SCHEDULE_QUEUED_JOBS_WHEN_FREE_MINS)
+                print(slot is None, slot, CONFIG.SCHEDULE_QUEUED_JOBS_WHEN_FREE_MINS)
                 if slot is None or slot >= CONFIG.SCHEDULE_QUEUED_JOBS_WHEN_FREE_MINS:
                     scheduled_tasks += 1
 
+            print(scheduled_tasks, len(job.tasks))
             if scheduled_tasks == len(job.tasks):
                 scheduled_jobs.append(job)
 

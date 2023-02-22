@@ -86,15 +86,17 @@ class JobSchedulingService(Service):
         for host in hosts_with_gpu_occupation:
             ret[host] = {}
             for gpu_id in hosts_with_gpu_occupation[host]:
-                if hosts_with_gpu_occupation[host][gpu_id]:
+                running = hosts_with_gpu_occupation[host][gpu_id]
+                if running and any('tensorhive_task' in proc.get('command') for proc in running):
+                    print('aaaaaa', hosts_with_gpu_occupation[host][gpu_id])
                     ret[host][gpu_id] = 0
                 else:
                     near_reservations = Reservation.upcoming_events_for_resource(gpu_id, self.considered_future_period)
                     if len(near_reservations):
                         nearest_reservation = near_reservations[0]
+                        print('bbbbb', nearest_reservation.start, datetime.utcnow())
                         if nearest_reservation.start > datetime.utcnow():  # type: ignore
-                            ret[host][gpu_id] = \
-                                (nearest_reservation.start - datetime.utcnow()).total_seconds() / 60  # type: ignore
+                            ret[host][gpu_id] = (nearest_reservation.start - datetime.utcnow()).total_seconds() / 60  # type: ignore
                         else:
                             ret[host][gpu_id] = 0
                     else:
@@ -182,10 +184,13 @@ class JobSchedulingService(Service):
         queued_jobs = Job.get_job_queue()
 
         queued_jobs_to_eligible_gpus = self.get_hosts_with_gpus_eligible_for_jobs(queued_jobs)
+        print(queued_jobs_to_eligible_gpus)
 
         available_slots = self.check_current_gpu_slots(available_hosts_with_gpu_occupation)
+        print(available_slots)
 
         scheduled_jobs = self._scheduler.schedule_jobs(queued_jobs_to_eligible_gpus, available_slots)
+        print(scheduled_jobs)
 
         for scheduled_job in scheduled_jobs:
             log.info(self._log_msg(now=datetime.utcnow(), action='Executing queued', id=scheduled_job.id))
