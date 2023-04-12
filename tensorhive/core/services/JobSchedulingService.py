@@ -87,30 +87,30 @@ class JobSchedulingService(Service):
             ret[host] = {}
             for gpu_id in hosts_with_gpu_occupation[host]:
                 running = hosts_with_gpu_occupation[host][gpu_id]
-                if running and any('tensorhive_task' in proc.get('command') for proc in running):
-                    print('aaaaaa', hosts_with_gpu_occupation[host][gpu_id])
+
+                if running and any('tensorhive_task' in proc.get('command') and proc.get('owner') != 'gdm' for proc in running):
                     ret[host][gpu_id] = 0
                 else:
                     near_reservations = Reservation.upcoming_events_for_resource(gpu_id, self.considered_future_period)
                     if len(near_reservations):
                         nearest_reservation = near_reservations[0]
-                        print('bbbbb', nearest_reservation.start, datetime.utcnow())
                         if nearest_reservation.start > datetime.utcnow():  # type: ignore
                             ret[host][gpu_id] = (nearest_reservation.start - datetime.utcnow()).total_seconds() / 60  # type: ignore
                         else:
                             ret[host][gpu_id] = 0
                     else:
                         ret[host][gpu_id] = None
+                        # print('reset none')
         return ret
 
-    @staticmethod
-    def check_if_resources_available_for_job(job: Job, current_device_occupation: Dict[str, Dict[str, bool]]) -> bool:
+    def check_if_resources_available_for_job(self, job: Job, current_device_occupation: Dict[str, Dict[str, bool]]) -> bool:
         for task in job.tasks:
             if not task.hostname:
                 return False
-            if not task.gpu_id:
+            if not task.gpu_id and task.gpu_id != 0:
                 return False
-            if current_device_occupation[task.hostname][task.gpu_id]:
+            gpu_uid = self._infrastructure_manager.get_gpu_uid(task.hostname, task.gpu_id)
+            if current_device_occupation.get(task.hostname, {}).get(gpu_uid, []):
                 return False
         return True
 
@@ -137,6 +137,7 @@ class JobSchedulingService(Service):
         '''
         now = datetime.utcnow()
         user_scheduled_jobs = self.find_jobs_scheduled_for_date(now)
+        taken_host_gpu = []
 
         successfully_executed = False
         for user_scheduled_job in user_scheduled_jobs:
@@ -150,9 +151,22 @@ class JobSchedulingService(Service):
                                        id=user_scheduled_job.id, scheduled=user_scheduled_job._start_at))
                 continue
 
+            keys = [(task.hostname, task.gpu_id) for task in user_scheduled_job.tasks]
+
+            if any(key in taken_host_gpu for key in keys):
+                log.info(self._log_msg(now=now, action='Not executing scheduled job because interferes',
+                                    id=user_scheduled_job.id, scheduled=user_scheduled_job._start_at))
+                continue
+
             log.info(self._log_msg(now=now, action='Executing scheduled', id=user_scheduled_job.id,
                                    scheduled=user_scheduled_job._start_at))
-            successfully_executed = successfully_executed or self.try_execute(user_scheduled_job)
+
+            cur_job_exec_status = self.try_execute(user_scheduled_job)
+            if cur_job_exec_status:
+                user_scheduled_job._start_at = None
+                user_scheduled_job.save()
+                taken_host_gpu.extend(keys)
+            successfully_executed |= cur_job_exec_status
 
         return successfully_executed
 
@@ -184,13 +198,10 @@ class JobSchedulingService(Service):
         queued_jobs = Job.get_job_queue()
 
         queued_jobs_to_eligible_gpus = self.get_hosts_with_gpus_eligible_for_jobs(queued_jobs)
-        print(queued_jobs_to_eligible_gpus)
 
         available_slots = self.check_current_gpu_slots(available_hosts_with_gpu_occupation)
-        print(available_slots)
 
         scheduled_jobs = self._scheduler.schedule_jobs(queued_jobs_to_eligible_gpus, available_slots)
-        print(scheduled_jobs)
 
         for scheduled_job in scheduled_jobs:
             log.info(self._log_msg(now=datetime.utcnow(), action='Executing queued', id=scheduled_job.id))
@@ -263,8 +274,7 @@ class JobSchedulingService(Service):
                 considered_future_period = timedelta(minutes=CONFIG.SCHEDULE_QUEUED_JOBS_WHEN_FREE_MINS)
                 interferes = self.interferes_with_reservations(job, available_hosts_with_gpu_occupation,
                                                                considered_future_period=considered_future_period,
-                                                               # Queued jobs should run only between reservations
-                                                               allow_own=False)
+                                                               allow_own=True)
                 if len(other_process_pids) or interferes:
                     job_should_be_stopped = True
 

@@ -2,8 +2,11 @@ import click
 from tensorhive.core.utils.colors import orange, green
 from tensorhive.core.utils.exceptions import ConfigurationException
 import tensorhive
+import datetime
 import logging
 import sys
+
+from pathlib import Path
 '''
 Current CLI Structure: (update regularly)
 tensorhive
@@ -30,7 +33,7 @@ def print_version(ctx, param, value):
     ctx.exit()
 
 
-def setup_logging(log_level=logging.INFO):
+def setup_logging(log_dir: Path, log_level=logging.INFO):
     FORMAT = '%(levelname)-8s | %(asctime)s | %(threadName)-30s | MSG: %(message)-79s | FROM: %(name)s'
 
     # Remove existing configuration first (otherwise basicConfig won't be applied for the second time)
@@ -41,15 +44,36 @@ def setup_logging(log_level=logging.INFO):
     # TODO May want use dictConfig instead of basicConfig (must import separately: logging.config)
 
     # Apply new config
-    logging.basicConfig(level=log_level, format=FORMAT)
 
     # May want to restrict logging from external modules (must be imported first!)
     # import pssh
-    logging.getLogger('passlib').setLevel(logging.CRITICAL)
-    logging.getLogger('pssh').setLevel(logging.CRITICAL)
-    logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
-    logging.getLogger('connexion').setLevel(logging.CRITICAL)
-    logging.getLogger('swagger_spec_validator').setLevel(logging.CRITICAL)
+
+    loggers = [
+        ('passlib', logging.CRITICAL),
+        ('pssh', logging.CRITICAL),
+        ('werkzeug', logging.INFO),
+        ('connexion', logging.CRITICAL),
+        ('swagger_spec_validator', logging.CRITICAL)
+    ]
+
+    if log_dir is not None:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        
+        filename = 'test_log.log'#datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S.log")
+        log_path = str(log_dir / filename)
+
+    def _get_file_handler(level):
+        file_handler = logging.FileHandler(log_path)
+        file_handler.setLevel(level)
+        file_handler.setFormatter(logging.Formatter(FORMAT))
+        return file_handler
+
+    logging.basicConfig(level=log_level, format=FORMAT, handlers=[_get_file_handler(log_level)])
+
+    for logger_name, level in loggers:
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(level)
+        # logger.addHandler(_get_file_handler(level))
 
     # May want to disable logging completely
     # logging.getLogger('werkzeug').disabled = True
@@ -76,15 +100,19 @@ def log_level_mapping(ctx, param, value: str) -> int:
               type=click.Choice(AVAILABLE_LOG_LEVELS.keys()),
               callback=log_level_mapping,
               help='Log level to apply.')
+@click.option('--log-dir', '-d',
+              type=Path,
+              default=Path('/home/tensorhive/.logs/TensorHive'),
+              help='Folder to log into.')
 # TODO Allow using custom configuration from file: --config
 @click.pass_context
-def main(ctx, log_level):
+def main(ctx, log_level, log_dir):
     if ctx.invoked_subcommand is not None:
         # Invoke subcommand only
         return
 
     click.echo('TensorHive {}'.format(tensorhive.__version__))
-    setup_logging(log_level=log_level)
+    setup_logging(log_dir, log_level=log_level)
 
     from tensorhive.core.managers.TensorHiveManager import TensorHiveManager
     from tensorhive.api.APIServer import APIServer

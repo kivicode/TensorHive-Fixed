@@ -73,5 +73,6 @@ class InfrastructureManager():
             '/usr/lib/xorg/Xorg',
             '/usr/bin/X',
             'X',
+            'gnome-shell',
             '-'  # nvidia-smi on TITAN X shows this for whatever reason...
         ]

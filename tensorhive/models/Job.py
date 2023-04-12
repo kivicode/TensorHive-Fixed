@@ -125,8 +125,9 @@ class Job(CRUDModel, Base):  # type: ignore
             self._start_at = DateUtils.try_parse_string(value)
             if self._start_at is None:
                 log.error('Unsupported type (start_at={})'.format(value))
-            else:
-                assert self._start_at > datetime.utcnow(), 'Job start time must be in the future!'
+            elif self._start_at < datetime.utcnow():
+                self._start_at = datetime.utcnow()
+                # assert self._start_at > datetime.utcnow(), 'Job start time must be in the future!'
         else:
             self._start_at = None
 

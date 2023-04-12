@@ -64,6 +64,7 @@ export default {
       const rules = [
         (v) => {
           if (v) {
+            return true
             return (
               moment(v).isSameOrAfter(moment()) ||
               'Start date cannot be set to past'
