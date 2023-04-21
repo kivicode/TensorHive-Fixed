@@ -33,7 +33,7 @@ def print_version(ctx, param, value):
     ctx.exit()
 
 
-def setup_logging(log_dir: Path, log_level=logging.INFO):
+def setup_logging(log_dir: Path = None, log_level=logging.INFO):
     FORMAT = '%(levelname)-8s | %(asctime)s | %(threadName)-30s | MSG: %(message)-79s | FROM: %(name)s'
 
     # Remove existing configuration first (otherwise basicConfig won't be applied for the second time)
@@ -59,7 +59,7 @@ def setup_logging(log_dir: Path, log_level=logging.INFO):
     if log_dir is not None:
         log_dir.mkdir(parents=True, exist_ok=True)
         
-        filename = 'test_log.log'#datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S.log")
+        filename = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S.log")
         log_path = str(log_dir / filename)
 
     def _get_file_handler(level):
