@@ -68,7 +68,9 @@ def setup_logging(log_dir: Path = None, log_level=logging.INFO):
         file_handler.setFormatter(logging.Formatter(FORMAT))
         return file_handler
 
-    logging.basicConfig(level=log_level, format=FORMAT, handlers=[_get_file_handler(log_level)])
+    handlers = [_get_file_handler(log_level)] if log_dir else []
+
+    logging.basicConfig(level=log_level, format=FORMAT, handlers=handlers)
 
     for logger_name, level in loggers:
         logger = logging.getLogger(logger_name)
